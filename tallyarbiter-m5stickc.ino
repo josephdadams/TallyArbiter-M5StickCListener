@@ -28,8 +28,9 @@ JSONVar Devices;
 JSONVar DeviceStates;
 String DeviceId = "unassigned";
 String DeviceName = "Unassigned";
-bool mode_preview = false;
+bool mode_preview = false;  
 bool mode_program = false;
+const byte led_program = 10;
 
 //General Variables
 bool networkConnected = false;
@@ -55,6 +56,10 @@ void setup() {
     delay(200);
   }
 
+  // Enable interal led for program trigger
+  pinMode(led_program, OUTPUT);
+  digitalWrite(led_program, LOW);
+  
   connectToServer();
 }
 
@@ -278,6 +283,7 @@ void SetDeviceName() {
 void evaluateMode() {
   M5.Lcd.setCursor(0, 30);
   M5.Lcd.setTextSize(2);
+  digitalWrite(led_program, HIGH);
   
   if (mode_preview && !mode_program) {
     logger("The device is in preview.", "info-quiet");
@@ -288,6 +294,7 @@ void evaluateMode() {
     logger("The device is in program.", "info-quiet");
     M5.Lcd.setTextColor(BLACK);
     M5.Lcd.fillScreen(RED);
+    digitalWrite(led_program, LOW);
   }
   else if (mode_preview && mode_program) {
     logger("The device is in preview+program.", "info-quiet");
