@@ -7,6 +7,7 @@
 #endif
 
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <SocketIoClient.h>
 #include <Arduino_JSON.h>
 #include <PinButton.h>
@@ -30,9 +31,11 @@ IPAddress clientIp(192, 168, 2, 5); // Static IP
 IPAddress subnet(255, 255, 255, 0); // Subnet Mask
 IPAddress gateway(192, 168, 2, 1); // Gateway
 
-//Tally Arbiter Server
-const char * tallyarbiter_host = "192.168.0.137"; //IP address of the Tally Arbiter Server
+//Tally Arbiter Server mDNS name 
+const char * tallyarbiter_host = "tallyserver"; //IP address of the Tally Arbiter Server (only use host name and remove .local)
 const int tallyarbiter_port = 4455;
+/* END OF USER CONFIG */
+
 
 /* END OF USER CONFIG */
 
@@ -79,6 +82,13 @@ void setup() {
   connectToNetwork(); //starts Wifi connection
   while (!networkConnected) {
     delay(200);
+  }
+
+  if (!MDNS.begin("esp32")) {
+    Serial.println("Error setting up MDNS responder!");
+    while (1) {
+      delay(1000);
+    }
   }
 
   // Enable interal led for program trigger
@@ -208,7 +218,16 @@ void connectToServer() {
   socket.on("flash", socket_Flash);
   socket.on("reassign", socket_Reassign);
   socket.on("messaging", socket_Messaging);
-  socket.begin(tallyarbiter_host, tallyarbiter_port);
+
+  IPAddress serverIp = MDNS.queryHost(tallyarbiter_host);
+
+  if (serverIp) {
+    Serial.print("IP address of server: ");
+    Serial.println(serverIp.toString());
+    socket.begin(serverIp.toString().c_str(), tallyarbiter_port);
+  } else {  
+    socket.begin(tallyarbiter_host, tallyarbiter_port);
+  }
 }
 
 void socket_Connected(const char * payload, size_t length) {
