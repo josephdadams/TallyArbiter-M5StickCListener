@@ -19,13 +19,17 @@
 /* USER CONFIG VARIABLES
  *  Change the following variables before compiling and sending the code to your device.
  */
- 
+
+bool CUT_BUS = true; // true = Programm + Preview = Red Tally; false = Programm + Preview = Yellow Tally
+bool LAST_MSG = false; // true = show log on tally screen
+
 //Wifi SSID and password
 const char * networkSSID = "NetworkSSID";
 const char * networkPass = "NetworkPass";
 
 //For static IP Configuration, change USE_STATIC to true and define your IP address settings below
 bool USE_STATIC = false; // true = use static, false = use DHCP
+
 IPAddress clientIp(192, 168, 2, 5); // Static IP
 IPAddress subnet(255, 255, 255, 0); // Subnet Mask
 IPAddress gateway(192, 168, 2, 1); // Gateway
@@ -41,6 +45,8 @@ PinButton btnM5(37); //the "M5" button on the device
 PinButton btnAction(39); //the "Action" button on the device
 Preferences preferences;
 uint8_t wasPressed();
+const byte led_program = 10;
+const int led_preview = 26;   //OPTIONAL Led for preview on pin G26
 
 //Tally Arbiter variables
 SocketIoClient socket;
@@ -50,9 +56,8 @@ JSONVar DeviceStates;
 String DeviceId = "unassigned";
 String DeviceName = "Unassigned";
 String ListenerType = "m5-stickc";
-bool mode_preview = false;  
+bool mode_preview = false;
 bool mode_program = false;
-const byte led_program = 10;
 String LastMessage = "";
 
 //General Variables
@@ -61,6 +66,7 @@ int currentScreen = 0; //0 = Tally Screen, 1 = Settings Screen
 int currentBrightness = 11; //12 is Max level
 
 void setup() {
+  pinMode (led_preview, OUTPUT);
   Serial.begin(115200);
   while (!Serial);
 
@@ -93,15 +99,16 @@ void setup() {
     DeviceName = preferences.getString("devicename");
   }
   preferences.end();
-  
+
   connectToServer();
+
 }
 
 void loop() {
   socket.loop();
   btnM5.update();
   btnAction.update();
-  
+
   if (btnM5.isClick()) {
     switch (currentScreen) {
       case 0:
@@ -173,14 +180,14 @@ void connectToNetwork() {
 
   WiFi.disconnect(true);
   WiFi.onEvent(WiFiEvent);
-  
+
   WiFi.mode(WIFI_STA); //station
   WiFi.setSleep(false);
-  
+
   if(USE_STATIC == true) {
     WiFi.config(clientIp, gateway, subnet);
   }
-   
+
   WiFi.begin(networkSSID, networkPass);
 }
 
@@ -254,7 +261,7 @@ void socket_Flash(const char * payload, size_t length) {
   M5.Lcd.fillScreen(WHITE);
   delay(500);
   M5.Lcd.fillScreen(TFT_BLACK);
-  
+
   //then resume normal operation
   switch (currentScreen) {
       case 0:
@@ -341,38 +348,47 @@ void SetDeviceName() {
   preferences.begin("tally-arbiter", false);
   preferences.putString("devicename", DeviceName);
   preferences.end();
-
   evaluateMode();
 }
 
 void evaluateMode() {
   M5.Lcd.setCursor(0, 30);
   M5.Lcd.setTextSize(2);
-  
+
   if (mode_preview && !mode_program) {
     logger("The device is in preview.", "info-quiet");
-    digitalWrite(led_program, HIGH);
     M5.Lcd.setTextColor(BLACK);
     M5.Lcd.fillScreen(GREEN);
+    digitalWrite(led_program, HIGH);
+    digitalWrite (led_preview, HIGH);
   }
   else if (!mode_preview && mode_program) {
     logger("The device is in program.", "info-quiet");
-    digitalWrite(led_program, LOW);
     M5.Lcd.setTextColor(BLACK);
     M5.Lcd.fillScreen(RED);
+    digitalWrite(led_program, LOW);
+    digitalWrite(led_preview, LOW);
   }
   else if (mode_preview && mode_program) {
     logger("The device is in preview+program.", "info-quiet");
-    digitalWrite(led_program, LOW);
     M5.Lcd.setTextColor(BLACK);
-    M5.Lcd.fillScreen(YELLOW);
+      if (CUT_BUS == true) {
+      M5.Lcd.fillScreen(RED);
+      }
+      else {
+        M5.Lcd.fillScreen(YELLOW);
+      }
+    digitalWrite(led_program, LOW);
+    digitalWrite (led_preview, HIGH);
   }
   else {
     digitalWrite(led_program, HIGH);
+    digitalWrite(led_preview, LOW);
     M5.Lcd.setTextColor(GRAY);
     M5.Lcd.fillScreen(TFT_BLACK);
   }
-
   M5.Lcd.println(DeviceName);
-  M5.Lcd.println(LastMessage);
+   if (LAST_MSG == true);{
+    M5.Lcd.println(LastMessage);
+  }
 }
