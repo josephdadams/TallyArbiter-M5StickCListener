@@ -20,12 +20,16 @@
  *  Change the following variables before compiling and sending the code to your device.
  */
 
+bool CUT_BUS = true; // true = Programm + Preview = Red Tally; false = Programm + Preview = Yellow Tally
+bool LAST_MSG = false; // true = show log on tally screen
+
 //Wifi SSID and password
 const char * networkSSID = "NetworkSSID";
 const char * networkPass = "NetworkPass";
 
 //For static IP Configuration, change USE_STATIC to true and define your IP address settings below
 bool USE_STATIC = false; // true = use static, false = use DHCP
+
 IPAddress clientIp(192, 168, 2, 5); // Static IP
 IPAddress subnet(255, 255, 255, 0); // Subnet Mask
 IPAddress gateway(192, 168, 2, 1); // Gateway
@@ -368,7 +372,12 @@ void evaluateMode() {
   else if (mode_preview && mode_program) {
     logger("The device is in preview+program.", "info-quiet");
     M5.Lcd.setTextColor(BLACK);
-    M5.Lcd.fillScreen(RED);
+      if (CUT_BUS == true) {
+      M5.Lcd.fillScreen(RED);
+      }
+      else {
+        M5.Lcd.fillScreen(YELLOW);
+      }
     digitalWrite(led_program, LOW);
     digitalWrite (led_preview, HIGH);
   }
@@ -379,4 +388,7 @@ void evaluateMode() {
     M5.Lcd.fillScreen(TFT_BLACK);
   }
   M5.Lcd.println(DeviceName);
+   if (LAST_MSG == true);{
+    M5.Lcd.println(LastMessage);
+  }
 }
