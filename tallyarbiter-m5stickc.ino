@@ -7,7 +7,8 @@
 #endif
 
 #include <WiFi.h>
-#include <SocketIoClient.h>
+#include <WebSocketsClient.h>
+#include <SocketIOclient.h>
 #include <Arduino_JSON.h>
 #include <PinButton.h>
 #include <Preferences.h>
@@ -49,7 +50,7 @@ const byte led_program = 10;
 const int led_preview = 26;   //OPTIONAL Led for preview on pin G26
 
 //Tally Arbiter variables
-SocketIoClient socket;
+SocketIOclient socket;
 JSONVar BusOptions;
 JSONVar Devices;
 JSONVar DeviceStates;
@@ -205,17 +206,68 @@ void WiFiEvent(WiFiEvent_t event) {
   }
 }
 
+void ws_emit(String event, const char *payload = NULL) {
+  if (payload) {
+    String msg = "[\"" + event + "\"," + payload + "]";
+    socket.sendEVENT(msg);
+  } else {
+    String msg = "[\"" + event + "\"]";
+    socket.sendEVENT(msg);
+  }
+}
+
 void connectToServer() {
   logger("Connecting to Tally Arbiter host: " + String(tallyarbiter_host), "info");
-  socket.on("connect", socket_Connected);
-  socket.on("bus_options", socket_BusOptions);
-  socket.on("deviceId", socket_DeviceId);
-  socket.on("devices", socket_Devices);
-  socket.on("device_states", socket_DeviceStates);
-  socket.on("flash", socket_Flash);
-  socket.on("reassign", socket_Reassign);
-  socket.on("messaging", socket_Messaging);
+  socket.onEvent(socket_event);
   socket.begin(tallyarbiter_host, tallyarbiter_port);
+}
+
+void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case sIOtype_CONNECT:
+      socket_Connected((char*)payload, length);
+      break;
+
+    case sIOtype_DISCONNECT:
+    case sIOtype_ACK:
+    case sIOtype_ERROR:
+    case sIOtype_BINARY_EVENT:
+    case sIOtype_BINARY_ACK:
+      // Not handled
+      break;
+
+    case sIOtype_EVENT:
+      String msg = (char*)payload;
+      String type = msg.substring(2, msg.indexOf("\"",2));
+      String content = msg.substring(type.length() + 4);
+      content.remove(content.length() - 1);
+
+      logger("Got event '" + type + "', data: " + content, "info-quiet");
+
+      if (type == "bus_options") BusOptions = JSON.parse(content);
+      if (type == "reassign") socket_Reassign(content);
+      if (type == "flash") socket_Flash();
+      if (type == "messaging") socket_Messaging(content);
+
+      if (type == "deviceId") {
+        DeviceId = content.substring(1, content.length()-2);
+        SetDeviceName();
+        showDeviceInfo();
+        currentScreen = 0;
+      }
+
+      if (type == "devices") {
+        Devices = JSON.parse(content);
+        SetDeviceName();
+      }
+
+      if (type == "device_states") {
+          DeviceStates = JSON.parse(content);
+          processTallyData();
+      }
+
+      break;
+  }
 }
 
 void socket_Connected(const char * payload, size_t length) {
@@ -223,32 +275,11 @@ void socket_Connected(const char * payload, size_t length) {
   String deviceObj = "{\"deviceId\": \"" + DeviceId + "\", \"listenerType\": \"" + ListenerType + "\"}";
   char charDeviceObj[1024];
   strcpy(charDeviceObj, deviceObj.c_str());
-  socket.emit("bus_options");
-  socket.emit("device_listen_m5", charDeviceObj);
+  ws_emit("bus_options");
+  ws_emit("device_listen_m5", charDeviceObj);
 }
 
-void socket_BusOptions(const char * payload, size_t length) {
-  BusOptions = JSON.parse(payload);
-}
-
-void socket_Devices(const char * payload, size_t length) {
-  Devices = JSON.parse(payload);
-  SetDeviceName();
-}
-
-void socket_DeviceId(const char * payload, size_t length) {
-  DeviceId = String(payload);
-  SetDeviceName();
-  showDeviceInfo();
-  currentScreen = 0;
-}
-
-void socket_DeviceStates(const char * payload, size_t length) {
-  DeviceStates = JSON.parse(payload);
-  processTallyData();
-}
-
-void socket_Flash(const char * payload, size_t length) {
+void socket_Flash() {
   //flash the screen white 3 times
   M5.Lcd.fillScreen(WHITE);
   delay(500);
@@ -273,13 +304,26 @@ void socket_Flash(const char * payload, size_t length) {
   }
 }
 
-void socket_Reassign(const char * payload, size_t length) {
-  String oldDeviceId = String(payload).substring(0,8);
-  String newDeviceId = String(payload).substring(11);
+String strip_quot(String str) {
+  if (str[0] == '"') {
+    str.remove(0, 1);
+  }
+  if (str.endsWith("\"")) {
+    str.remove(str.length()-1, 1);
+  }
+  return str;
+}
+
+void socket_Reassign(String payload) {
+  String oldDeviceId = payload.substring(0, payload.indexOf(','));
+  String newDeviceId = payload.substring(oldDeviceId.length()+1);
+  oldDeviceId = strip_quot(oldDeviceId);
+  newDeviceId = strip_quot(newDeviceId);
+
   String reassignObj = "{\"oldDeviceId\": \"" + oldDeviceId + "\", \"newDeviceId\": \"" + newDeviceId + "\"}";
   char charReassignObj[1024];
   strcpy(charReassignObj, reassignObj.c_str());
-  socket.emit("listener_reassign_object", charReassignObj);
+  ws_emit("listener_reassign_object", charReassignObj);
   M5.Lcd.fillScreen(WHITE);
   delay(200);
   M5.Lcd.fillScreen(TFT_BLACK);
@@ -294,7 +338,7 @@ void socket_Reassign(const char * payload, size_t length) {
   SetDeviceName();
 }
 
-void socket_Messaging(const char * payload, size_t length) {
+void socket_Messaging(String payload) {
   String strPayload = String(payload);
   int typeQuoteIndex = strPayload.indexOf("\"");
   String messageType = strPayload.substring(0, typeQuoteIndex);
