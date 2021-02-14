@@ -250,7 +250,7 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
       if (type == "messaging") socket_Messaging(content);
 
       if (type == "deviceId") {
-        DeviceId = content.substring(1, content.length()-2);
+        DeviceId = content.substring(1, content.length()-1);
         SetDeviceName();
         showDeviceInfo();
         currentScreen = 0;
@@ -262,8 +262,8 @@ void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) 
       }
 
       if (type == "device_states") {
-          DeviceStates = JSON.parse(content);
-          processTallyData();
+        DeviceStates = JSON.parse(content);
+        processTallyData();
       }
 
       break;
@@ -295,12 +295,12 @@ void socket_Flash() {
 
   //then resume normal operation
   switch (currentScreen) {
-      case 0:
-        showDeviceInfo();
-        break;
-      case 1:
-        showSettings();
-        break;
+    case 0:
+      showDeviceInfo();
+      break;
+    case 1:
+      showSettings();
+      break;
   }
 }
 
@@ -324,6 +324,7 @@ void socket_Reassign(String payload) {
   char charReassignObj[1024];
   strcpy(charReassignObj, reassignObj.c_str());
   ws_emit("listener_reassign_object", charReassignObj);
+  ws_emit("devices");
   M5.Lcd.fillScreen(WHITE);
   delay(200);
   M5.Lcd.fillScreen(TFT_BLACK);
@@ -340,10 +341,12 @@ void socket_Reassign(String payload) {
 
 void socket_Messaging(String payload) {
   String strPayload = String(payload);
-  int typeQuoteIndex = strPayload.indexOf("\"");
+  int typeQuoteIndex = strPayload.indexOf(',');
   String messageType = strPayload.substring(0, typeQuoteIndex);
-  int messageQuoteIndex = strPayload.lastIndexOf("\"");
-  String message = strPayload.substring(messageQuoteIndex+1);
+  messageType.replace("\"", "");
+  int messageQuoteIndex = strPayload.lastIndexOf(',');
+  String message = strPayload.substring(messageQuoteIndex + 1);
+  message.replace("\"", "");
   LastMessage = messageType + ": " + message;
   evaluateMode();
 }
@@ -416,12 +419,12 @@ void evaluateMode() {
   else if (mode_preview && mode_program) {
     logger("The device is in preview+program.", "info-quiet");
     M5.Lcd.setTextColor(BLACK);
-      if (CUT_BUS == true) {
+    if (CUT_BUS == true) {
       M5.Lcd.fillScreen(RED);
-      }
-      else {
-        M5.Lcd.fillScreen(YELLOW);
-      }
+    }
+    else {
+      M5.Lcd.fillScreen(YELLOW);
+    }
     digitalWrite(led_program, LOW);
     digitalWrite (led_preview, HIGH);
   }
