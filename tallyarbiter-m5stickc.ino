@@ -435,7 +435,7 @@ void evaluateMode() {
     M5.Lcd.fillScreen(TFT_BLACK);
   }
   M5.Lcd.println(DeviceName);
-   if (LAST_MSG == true);{
+   if (LAST_MSG == true){
     M5.Lcd.println(LastMessage);
   }
 }
