@@ -6,16 +6,24 @@
 #include <M5StickC.h>
 #endif
 
-#include <WiFi.h>
 #include <WebSocketsClient.h>
 #include <SocketIOclient.h>
 #include <Arduino_JSON.h>
 #include <PinButton.h>
+#include <WiFiManager.h>
 #include <Preferences.h>
 
+#define TRIGGER_PIN 0 //reset pin 
 #define GRAY  0x0020 //   8  8  8
 #define GREEN 0x0200 //   0 64  0
 #define RED   0xF800 // 255  0  0
+#define maxTextSize 5 //larger sourceName text
+
+
+//Local Default Camera Number
+int camNumber = 1;
+
+const String camName = "m5StickC "+String(camNumber);
 
 /* USER CONFIG VARIABLES
  *  Change the following variables before compiling and sending the code to your device.
@@ -24,9 +32,6 @@
 bool CUT_BUS = true; // true = Programm + Preview = Red Tally; false = Programm + Preview = Yellow Tally
 bool LAST_MSG = false; // true = show log on tally screen
 
-//Wifi SSID and password
-const char * networkSSID = "NetworkSSID";
-const char * networkPass = "NetworkPass";
 
 //For static IP Configuration, change USE_STATIC to true and define your IP address settings below
 bool USE_STATIC = false; // true = use static, false = use DHCP
@@ -36,7 +41,7 @@ IPAddress subnet(255, 255, 255, 0); // Subnet Mask
 IPAddress gateway(192, 168, 2, 1); // Gateway
 
 //Tally Arbiter Server
-const char * tallyarbiter_host = "192.168.0.137"; //IP address of the Tally Arbiter Server
+char tallyarbiter_host[40] = "192.168.2.11"; //IP address of the Tally Arbiter Server
 const int tallyarbiter_port = 4455;
 
 /* END OF USER CONFIG */
@@ -66,7 +71,11 @@ bool networkConnected = false;
 int currentScreen = 0; //0 = Tally Screen, 1 = Settings Screen
 int currentBrightness = 11; //12 is Max level
 
+WiFiManager wm; // global wm instance
+WiFiManagerParameter custom_field; // global param ( for non blocking w params )
+
 void setup() {
+  pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode (led_preview, OUTPUT);
   Serial.begin(115200);
   while (!Serial);
@@ -82,6 +91,27 @@ void setup() {
   M5.Lcd.setTextSize(1);
   logger("Tally Arbiter M5StickC+ Listener Client booting.", "info");
 
+  preferences.begin("tally-arbiter", false);
+
+  // added to clear out corrupt prefs
+  //preferences.clear();
+   Serial.println("Reading preferences");
+  if(preferences.getString("deviceid").length() > 0){
+    DeviceId = preferences.getString("deviceid");
+  }
+  if(preferences.getString("devicename").length() > 0){
+    DeviceName = preferences.getString("devicename");
+  }
+    if(preferences.getString("taHost").length() > 0){
+    String newHost = preferences.getString("taHost");
+    Serial.println("Setting TallyArbiter host as");
+    Serial.println(newHost);
+    char chr_newHost[40];
+    newHost.toCharArray(tallyarbiter_host, 40);
+  }
+ 
+  preferences.end();
+
   delay(100); //wait 100ms before moving on
   connectToNetwork(); //starts Wifi connection
   while (!networkConnected) {
@@ -92,20 +122,14 @@ void setup() {
   pinMode(led_program, OUTPUT);
   digitalWrite(led_program, HIGH);
 
-  preferences.begin("tally-arbiter", false);
-  if(preferences.getString("deviceid").length() > 0){
-    DeviceId = preferences.getString("deviceid");
-  }
-  if(preferences.getString("devicename").length() > 0){
-    DeviceName = preferences.getString("devicename");
-  }
-  preferences.end();
+  
 
   connectToServer();
 
 }
 
 void loop() {
+  checkReset(); //check for reset pin
   socket.loop();
   btnM5.update();
   btnAction.update();
@@ -134,7 +158,7 @@ void showSettings() {
   M5.Lcd.fillScreen(TFT_BLACK);
   M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(WHITE, BLACK);
-  M5.Lcd.println("SSID: " + String(networkSSID));
+  M5.Lcd.println("SSID: " + String(WiFi.SSID()));
   M5.Lcd.println(WiFi.localIP());
   M5.Lcd.println();
   M5.Lcd.println("Tally Arbiter Server:");
@@ -169,7 +193,7 @@ void updateBrightness() {
 void logger(String strLog, String strType) {
   if (strType == "info") {
     Serial.println(strLog);
-    M5.Lcd.println(strLog);
+    //M5.Lcd.println(strLog);
   }
   else {
     Serial.println(strLog);
@@ -177,19 +201,71 @@ void logger(String strLog, String strType) {
 }
 
 void connectToNetwork() {
-  logger("Connecting to SSID: " + String(networkSSID), "info");
+  logger("Connecting to SSID: " + String(WiFi.SSID()), "info");
 
-  WiFi.disconnect(true);
-  WiFi.onEvent(WiFiEvent);
+  WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
 
-  WiFi.mode(WIFI_STA); //station
-  WiFi.setSleep(false);
+  //reset settings - wipe credentials for testing
+  //wm.resetSettings();
 
-  if(USE_STATIC == true) {
-    WiFi.config(clientIp, gateway, subnet);
+// add a custom input field
+  int customFieldLength = 40;
+
+  const char* custom_radio_str = "<br/><label for='taHostIP'>Tally Arbiter Server</label><input type='text' name='taHostIP'>";
+  new (&custom_field) WiFiManagerParameter(custom_radio_str); // custom html input
+  
+  wm.addParameter(&custom_field);
+  wm.setSaveParamsCallback(saveParamCallback);
+
+  // custom menu via array or vector
+  std::vector<const char *> menu = {"wifi","info","param","sep","restart","exit"};
+  wm.setMenu(menu);
+
+
+
+    // set dark theme
+    wm.setClass("invert");
+
+ wm.setConfigPortalTimeout(120); // auto close configportal after n seconds
+
+  bool res;
+
+  res = wm.autoConnect(camName.c_str()); // AP name for setup
+
+  if (!res) {
+    Serial.println("Failed to connect");
+    // ESP.restart();
   }
+  else {
+    //if you get here you have connected to the WiFi
+    Serial.println("connected...yay :)");
+    networkConnected = true;
+  }
+}
 
-  WiFi.begin(networkSSID, networkPass);
+String getParam(String name) {
+  //read parameter from server, for customhmtl input
+  String value;
+  if (wm.server->hasArg(name)) {
+    value = wm.server->arg(name);
+  }
+  return value;
+}
+
+
+void saveParamCallback() {
+  Serial.println("[CALLBACK] saveParamCallback fired");
+  Serial.println("PARAM tally Arbiter Server = " + getParam("taHostIP"));
+  String str_taHost = getParam("taHostIP");
+
+//  str_taHost.toCharArray(tallyarbiter_host, 40);
+//  saveEEPROM();
+  Serial.println("Saving new TallyArbiter host");
+  Serial.println(str_taHost);
+  preferences.begin("tally-arbiter", false);
+  preferences.putString("taHost", str_taHost);
+  preferences.end();
+
 }
 
 void WiFiEvent(WiFiEvent_t event) {
@@ -399,8 +475,8 @@ void SetDeviceName() {
 }
 
 void evaluateMode() {
-  M5.Lcd.setCursor(0, 30);
-  M5.Lcd.setTextSize(2);
+  M5.Lcd.setCursor(4, 30);
+  M5.Lcd.setTextSize(maxTextSize);
 
   if (mode_preview && !mode_program) {
     logger("The device is in preview.", "info-quiet");
@@ -437,5 +513,37 @@ void evaluateMode() {
   M5.Lcd.println(DeviceName);
    if (LAST_MSG == true){
     M5.Lcd.println(LastMessage);
+  }
+}
+
+void checkReset() {
+  // check for button press
+  if ( digitalRead(TRIGGER_PIN) == LOW ) {
+    // poor mans debounce/press-hold, code not ideal for production
+    delay(50);
+    if ( digitalRead(TRIGGER_PIN) == LOW ) {
+      Serial.println("Button Pressed");
+      // still holding button for 3000 ms, reset settings, code not ideaa for production
+      delay(3000); // reset delay hold
+      if ( digitalRead(TRIGGER_PIN) == LOW ) {
+        Serial.println("Button Held");
+        Serial.println("Erasing Config, restarting");
+        wm.resetSettings();
+        ESP.restart();
+      }
+
+      // start portal w delay
+      Serial.println("Starting config portal");
+      wm.setConfigPortalTimeout(120);
+
+      if (!wm.startConfigPortal(camName.c_str())) {
+        Serial.println("failed to connect or hit timeout");
+        delay(3000);
+        // ESP.restart();
+      } else {
+        //if you get here you have connected to the WiFi
+        Serial.println("connected...yeey :)");
+      }
+    }
   }
 }
