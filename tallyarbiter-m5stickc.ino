@@ -62,7 +62,6 @@ bool mode_program = false;
 String LastMessage = "";
 
 //General Variables
-bool networkConnected = false;
 int currentScreen = 0; //0 = Tally Screen, 1 = Settings Screen
 int currentBrightness = 11; //12 is Max level
 
@@ -82,12 +81,7 @@ void setup() {
   M5.Lcd.setTextSize(1);
   logger("Tally Arbiter M5StickC+ Listener Client booting.", "info");
 
-  delay(100); //wait 100ms before moving on
-  connectToNetwork(); //starts Wifi connection
-  while (!networkConnected) {
-    delay(200);
-  }
-
+  
   // Enable interal led for program trigger
   pinMode(led_program, OUTPUT);
   digitalWrite(led_program, HIGH);
@@ -100,9 +94,10 @@ void setup() {
     DeviceName = preferences.getString("devicename");
   }
   preferences.end();
-
-  connectToServer();
-
+  
+  delay(100); //wait 100ms before moving on
+  
+  connectToNetwork(); //starts Wifi connection
 }
 
 void loop() {
@@ -190,6 +185,8 @@ void connectToNetwork() {
   }
 
   WiFi.begin(networkSSID, networkPass);
+  
+  delay(1000); //Delay is needed to actually figure out, if connection is established
 }
 
 void WiFiEvent(WiFiEvent_t event) {
@@ -197,11 +194,12 @@ void WiFiEvent(WiFiEvent_t event) {
     case SYSTEM_EVENT_STA_GOT_IP:
       logger("Network connected!", "info");
       logger(WiFi.localIP().toString(), "info");
-      networkConnected = true;
+      connectToServer(); //if connection to wifi is established, actually start to connect the socket
       break;
     case SYSTEM_EVENT_STA_DISCONNECTED:
       logger("Network connection lost!", "info");
-      networkConnected = false;
+      logger("WiFi: Trying to reconnect", "info");
+      WiFi.reconnect(); //if the connection to WiFi is lost (for whatever reason, try to reconnect
       break;
   }
 }
