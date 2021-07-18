@@ -12,6 +12,8 @@
 #include <PinButton.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
+#include "Free_Fonts.h"
+
 
 #define TRIGGER_PIN 0 //reset pin 
 #define GRAY  0x0020 //   8  8  8
@@ -88,9 +90,10 @@ void setup() {
   setCpuFrequencyMhz(80);    //Save battery by turning down the CPU clock
   btStop();                 //Save battery by turning off BlueTooth
   M5.Lcd.setRotation(3);
-  M5.Lcd.setCursor(0, 0);
+  M5.Lcd.setCursor(0, 20);
   M5.Lcd.fillScreen(TFT_BLACK);
-  M5.Lcd.setTextSize(1);
+  M5.Lcd.setFreeFont(FSS9);
+  //M5.Lcd.setTextSize(2);
   M5.Lcd.setTextColor(WHITE, BLACK);
   M5.Lcd.println("booting...");
   logger("Tally Arbiter M5StickC+ Listener Client booting.", "info");
@@ -125,9 +128,6 @@ void setup() {
   // Enable interal led for program trigger
   pinMode(led_program, OUTPUT);
   digitalWrite(led_program, HIGH);
-
-  
-
   connectToServer();
 
 }
@@ -158,24 +158,25 @@ void loop() {
 
 void showSettings() {
   //displays the current network connection and Tally Arbiter server data
-  M5.Lcd.setCursor(0, 0);
+  M5.Lcd.setCursor(0, 20);
   M5.Lcd.fillScreen(TFT_BLACK);
-  M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(FSS9);
+  //M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(WHITE, BLACK);
   M5.Lcd.println("SSID: " + String(WiFi.SSID()));
   M5.Lcd.println(WiFi.localIP());
-  M5.Lcd.println();
+
   M5.Lcd.println("Tally Arbiter Server:");
   M5.Lcd.println(String(tallyarbiter_host) + ":" + String(tallyarbiter_port));
   M5.Lcd.println();
-  M5.Lcd.println("Battery:");
+  M5.Lcd.print("Bat: ");
   int batteryLevel = floor(100.0 * (((M5.Axp.GetVbatData() * 1.1 / 1000) - 3.0) / (4.07 - 3.0)));
   batteryLevel = batteryLevel > 100 ? 100 : batteryLevel;
    if(batteryLevel >= 100){
-  M5.Lcd.println("Battery charging...");   // show when M5 is plugged in
+  M5.Lcd.println("Charging...");   // show when M5 is plugged in
   }
   else {
-    M5.Lcd.println("Battery:" + String(batteryLevel) + "%");
+    M5.Lcd.println(String(batteryLevel) + "%");
     }
 }
 
@@ -484,8 +485,9 @@ void SetDeviceName() {
 
 void evaluateMode() {
 
-  M5.Lcd.setCursor(4, 30);
-  M5.Lcd.setTextSize(maxTextSize);
+  M5.Lcd.setCursor(4, 75);
+  M5.Lcd.setFreeFont(FSS24);
+  //M5.Lcd.setTextSize(maxTextSize);
 
   
   if (mode_preview && !mode_program && prevMode != 1) {
@@ -505,7 +507,8 @@ void evaluateMode() {
     M5.Lcd.fillScreen(RED);
     digitalWrite(led_program, LOW);
     digitalWrite(led_preview, LOW);
-        M5.Lcd.println(DeviceName);
+    M5.Lcd.println(DeviceName);
+
 
   }
   else if (mode_preview && mode_program && prevMode != 3) {
@@ -545,9 +548,10 @@ void checkReset() {
     // poor mans debounce/press-hold, code not ideal for production
     delay(50);
     if ( digitalRead(TRIGGER_PIN) == LOW ) {
-          M5.Lcd.setCursor(0, 0);
+          M5.Lcd.setCursor(0, 40);
   M5.Lcd.fillScreen(TFT_BLACK);
-  M5.Lcd.setTextSize(1);
+    M5.Lcd.setFreeFont(FSS9);
+  //M5.Lcd.setTextSize(1);
   M5.Lcd.setTextColor(WHITE, BLACK);
   M5.Lcd.println("Reset button pushed....");
       Serial.println("Button Pressed");
