@@ -1,5 +1,7 @@
 Added a Wifimanager with parameter option to set the Tally Arbiter Host address. Also has GPI reset. Short pin 0 to GND 
 
+Resolved 'Flicker' when TSL source updates
+
 
 # Tally Arbiter M5Stick-C Listener
 Tally Arbiter M5Stick-C Listener was written  by Joseph Adams and is distributed under the MIT License.
