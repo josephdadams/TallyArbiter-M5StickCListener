@@ -483,7 +483,7 @@ void SetDeviceName() {
 }
 
 void evaluateMode() {
-  Serial.println(prevMode);
+
   M5.Lcd.setCursor(4, 30);
   M5.Lcd.setTextSize(maxTextSize);
 
