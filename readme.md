@@ -1,4 +1,4 @@
-Added a Wifimanager with parameter option to set the Tally Arbiter Host address. Also has GPI reset. Short pin 0 to GND 
+Added a Wifimanager with parameter option to set the Tally Arbiter Host address. Also has GPI reset. Short pin 0 to GND to restart in AP mode.
 
 Resolved 'Flicker' when TSL source updates
 
