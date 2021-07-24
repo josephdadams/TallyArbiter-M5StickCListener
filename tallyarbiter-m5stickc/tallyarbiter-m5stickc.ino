@@ -485,7 +485,7 @@ void SetDeviceName() {
 
 void evaluateMode() {
 
-  M5.Lcd.setCursor(4, 75);
+  M5.Lcd.setCursor(4, 82);
   M5.Lcd.setFreeFont(FSS24);
   //M5.Lcd.setTextSize(maxTextSize);
 
