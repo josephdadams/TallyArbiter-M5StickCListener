@@ -44,7 +44,7 @@ IPAddress gateway(192, 168, 2, 1); // Gateway
 
 //Tally Arbiter Server
 char tallyarbiter_host[40] = "192.168.2.11"; //IP address of the Tally Arbiter Server
-const int tallyarbiter_port = 4455;
+char tallyarbiter_port[6] = "4455";
 
 /* END OF USER CONFIG */
 
@@ -116,11 +116,20 @@ void setup() {
     char chr_newHost[40];
     newHost.toCharArray(tallyarbiter_host, 40);
   }
+
+  if(preferences.getString("taPort").length() > 0){
+    String newPort = preferences.getString("taPort");
+    Serial.println("Setting TallyArbiter port as");
+    Serial.println(newPort);
+    char chr_newPort[6];
+    newPort.toCharArray(tallyarbiter_port, 6);
+  }
  
   preferences.end();
 
   delay(100); //wait 100ms before moving on
   connectToNetwork(); //starts Wifi connection
+  M5.Lcd.println("SSID: " + String(WiFi.SSID()));
   while (!networkConnected) {
     delay(200);
   }
@@ -210,9 +219,11 @@ void logger(String strLog, String strType) {
 }
 
 void connectToNetwork() {
-  logger("Connecting to SSID: " + String(WiFi.SSID()), "info");
+
 
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
+
+    logger("Connecting to SSID: " + String(WiFi.SSID()), "info");
 
   //reset settings - wipe credentials for testing
   //wm.resetSettings();
@@ -220,10 +231,16 @@ void connectToNetwork() {
 // add a custom input field
   int customFieldLength = 40;
 
-  const char* custom_radio_str = "<br/><label for='taHostIP'>Tally Arbiter Server</label><input type='text' name='taHostIP'>";
-  new (&custom_field) WiFiManagerParameter(custom_radio_str); // custom html input
+  //const char* custom_radio_str = "<br/><label for='taHostIP'>Tally Arbiter Server</label><input type='text' name='taHostIP'>";
+  //new (&custom_field) WiFiManagerParameter(custom_radio_str); // custom html input
+
+   WiFiManagerParameter custom_taServer("taHostIP", "Tally Arbiter Server", tallyarbiter_host, 40);
+   WiFiManagerParameter custom_taPort("taHostPort", "Port", tallyarbiter_port, 6);
+
+   wm.addParameter(&custom_taServer);
+   wm.addParameter(&custom_taPort);
   
-  wm.addParameter(&custom_field);
+  //wm.addParameter(&custom_field);
   wm.setSaveParamsCallback(saveParamCallback);
 
   // custom menu via array or vector
@@ -266,6 +283,7 @@ void saveParamCallback() {
   Serial.println("[CALLBACK] saveParamCallback fired");
   Serial.println("PARAM tally Arbiter Server = " + getParam("taHostIP"));
   String str_taHost = getParam("taHostIP");
+  String str_taPort = getParam("taHostPort");
 
 //  str_taHost.toCharArray(tallyarbiter_host, 40);
 //  saveEEPROM();
@@ -273,6 +291,7 @@ void saveParamCallback() {
   Serial.println(str_taHost);
   preferences.begin("tally-arbiter", false);
   preferences.putString("taHost", str_taHost);
+  preferences.putString("taPort", str_taPort);
   preferences.end();
 
 }
@@ -304,7 +323,7 @@ void ws_emit(String event, const char *payload = NULL) {
 void connectToServer() {
   logger("Connecting to Tally Arbiter host: " + String(tallyarbiter_host), "info");
   socket.onEvent(socket_event);
-  socket.begin(tallyarbiter_host, tallyarbiter_port);
+  socket.begin(tallyarbiter_host, atol(tallyarbiter_port));
 }
 
 void socket_event(socketIOmessageType_t type, uint8_t * payload, size_t length) {
