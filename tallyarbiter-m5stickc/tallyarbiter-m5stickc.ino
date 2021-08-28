@@ -244,7 +244,7 @@ void connectToNetwork() {
   wm.setSaveParamsCallback(saveParamCallback);
 
   // custom menu via array or vector
-  std::vector<const char *> menu = {"wifi","info","param","sep","restart","exit"};
+  std::vector<const char *> menu = {"wifi","param","info","sep","restart","exit"};
   wm.setMenu(menu);
 
 
